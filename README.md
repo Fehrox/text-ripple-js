@@ -63,8 +63,56 @@ Most people only need:
 - `window.TextRipple.runRipple(speedMultiplier)`
 - `window.TextRipple.scrambleReveal(element, options)`
 - `window.TextRipple.cancelAnimations()`
+- `window.TextRipple.startRippleInterval(intervalSeconds, speedMultiplier, root)`
+- `window.TextRipple.stopRippleInterval(root)`
 
 `runRipple(1)` runs the effect on every element matching `[data-ripple]`.
+
+## Repeat On An Interval
+
+If you want the effect to run once immediately and then repeat after a fixed delay, use `startRippleInterval(...)`.
+
+This interval starts counting after the previous ripple has fully finished.  
+Example: if you pass `30`, the library will:
+
+1. run the ripple immediately
+2. wait until that run completes
+3. wait 30 more seconds
+4. run the ripple again
+
+By default, interval-based reruns keep the current text visible and ripple through it rather than clearing the text first.
+
+Example:
+
+```html
+<script>
+  window.addEventListener("load", () => {
+    window.TextRipple.startRippleInterval(30);
+  });
+</script>
+```
+
+To stop the repeating behavior:
+
+```html
+<script>
+  window.TextRipple.stopRippleInterval();
+</script>
+```
+
+## Preserve Existing Text
+
+`scrambleReveal(...)` and `runRipple(...)` support a `preserveText` option.
+
+When `preserveText: true` is used, the ripple disturbs the existing text in place instead of blanking it first.
+
+Example:
+
+```html
+<script>
+  window.TextRipple.runRipple(1, document, { preserveText: true });
+</script>
+```
 
 ## Example
 
@@ -82,7 +130,7 @@ Most people only need:
   <script src="http://seb.fehr.work/text-ripple-js/text-ripple.js"></script>
   <script>
     window.addEventListener("load", () => {
-      window.TextRipple.runRipple(1);
+      window.TextRipple.startRippleInterval(30);
     });
   </script>
 </body>

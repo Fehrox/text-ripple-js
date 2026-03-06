@@ -3,6 +3,7 @@
 
   const GLYPHS = "~+#%*?:/@[]|$^";
   const activeAnimations = new Set();
+  const activeIntervals = new WeakMap();
   const STYLE_ID = "text-ripple-styles";
 
   function ensureRippleStyles(doc = document) {
@@ -142,10 +143,13 @@
 
     const duration = options.duration ?? 1800;
     const delay = options.delay ?? 0;
+    const preserveText = options.preserveText === true;
     const spread = Math.max(Math.floor(originalText.length * 1.45), 18);
-    let scrambledText = blankedText;
+    let scrambledText = preserveText ? originalText : blankedText;
 
-    writeFrameToSlots(slots, blankedText);
+    if (!preserveText) {
+      writeFrameToSlots(slots, blankedText);
+    }
 
     return new Promise((resolve) => {
       const animation = { cancelled: false };
@@ -170,9 +174,15 @@
         const eased = Math.pow(easeInOut(rawProgress), 2);
         const head = Math.floor(originalText.length * eased);
         const windowSize = Math.floor((1 - Math.abs(rawProgress - 0.5) * 2) * spread);
-        const lead = originalText.slice(0, head);
         const tailStart = Math.min(head + windowSize, originalText.length);
-        let frame = lead + scrambledText.slice(head, tailStart) + blankedText.slice(tailStart);
+        let frame;
+
+        if (preserveText) {
+          frame = originalText;
+        } else {
+          const lead = originalText.slice(0, head);
+          frame = lead + scrambledText.slice(head, tailStart) + blankedText.slice(tailStart);
+        }
 
         if (rawProgress > 0 && rawProgress < 1) {
           const mutations = Math.max(24, Math.floor(windowSize * 0.85));
@@ -219,6 +229,7 @@
     ensureRippleStyles(root);
 
     const targets = Array.from(root.querySelectorAll("[data-ripple]"));
+    const rippleOptions = arguments[2] || {};
 
     return Promise.all(targets.map((element, index) => {
       const baseDuration = Number(element.dataset.duration || 1800);
@@ -226,14 +237,69 @@
 
       return scrambleReveal(element, {
         duration: baseDuration * speedMultiplier,
-        delay: baseDelay * speedMultiplier
+        delay: baseDelay * speedMultiplier,
+        preserveText: rippleOptions.preserveText === true
       });
     }));
+  }
+
+  function stopRippleInterval(root = document) {
+    const state = activeIntervals.get(root);
+    if (!state) {
+      return false;
+    }
+
+    state.cancelled = true;
+
+    if (state.timeoutId) {
+      clearTimeout(state.timeoutId);
+    }
+
+    activeIntervals.delete(root);
+    return true;
+  }
+
+  function startRippleInterval(intervalSeconds, speedMultiplier = 1, root = document) {
+    const delayMs = Number(intervalSeconds) * 1000;
+    const rippleOptions = arguments[3] || { preserveText: true };
+
+    if (!Number.isFinite(delayMs) || delayMs < 0) {
+      throw new Error("intervalSeconds must be a non-negative number.");
+    }
+
+    stopRippleInterval(root);
+
+    const state = {
+      cancelled: false,
+      timeoutId: null
+    };
+
+    activeIntervals.set(root, state);
+
+    function scheduleNextRun() {
+      if (state.cancelled) {
+        return;
+      }
+
+      state.timeoutId = global.setTimeout(() => {
+        state.timeoutId = null;
+
+        if (state.cancelled) {
+          return;
+        }
+
+        runRipple(speedMultiplier, root, rippleOptions).then(scheduleNextRun);
+      }, delayMs);
+    }
+
+    runRipple(speedMultiplier, root, rippleOptions).then(scheduleNextRun);
+    return state;
   }
 
   global.TextRipple = {
     GLYPHS,
     activeAnimations,
+    activeIntervals,
     ensureRippleStyles,
     easeInOut,
     getTextNodes,
@@ -245,6 +311,8 @@
     buildRippleModel,
     scrambleReveal,
     cancelAnimations,
-    runRipple
+    runRipple,
+    startRippleInterval,
+    stopRippleInterval
   };
 })(window);
